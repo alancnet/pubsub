@@ -1,5 +1,8 @@
 import EventEmitter from 'events'
 import micromatch from 'micromatch'
+import { getLogger } from './logging.js'
+
+const logger = getLogger('redis-mock')
 
 let store = {}
 /** @type {Record<string, Set<RedisMock>>} */
@@ -14,6 +17,7 @@ const sleep = (ms = 5) => new Promise(resolve => setTimeout(resolve, ms))
 export default class RedisMock extends EventEmitter {
   constructor () {
     super()
+    logger.trace('New RedisMock')
     /** @type {Record<string, Function>} */
     this._pCallbacks = {}
     /** @type {Record<string, Function>} */
@@ -90,6 +94,7 @@ export default class RedisMock extends EventEmitter {
     this._callbacks[name] = cb
     if (!channels[name]) channels[name] = new Set()
     channels[name].add(this)
+    logger.trace(`Subscribed to ${name}`)
   }
 
   pSubscribe (name, cb) {
@@ -99,6 +104,7 @@ export default class RedisMock extends EventEmitter {
     this._pCallbacks[name] = cb
     if (!channels[name]) channels[name] = new Set()
     channels[name].add(this)
+    logger.trace(`PSubscribed to ${name}`)
   }
 
   unsubscribe (name) {
@@ -107,6 +113,7 @@ export default class RedisMock extends EventEmitter {
       channels[name].delete(this)
       if (!channels[name].size) delete channels[name]
     }
+    logger.trace(`Unsubscribed from ${name}`)
   }
 
   pUnsubscribe (name) {
@@ -115,9 +122,11 @@ export default class RedisMock extends EventEmitter {
       channels[name].delete(this)
       if (!channels[name].size) delete channels[name]
     }
+    logger.trace(`PUnsubscribed from ${name}`)
   }
 
   publish (name, message, cb) {
+    logger.trace(`Publishing to ${name}: ${message}`)
     for (const key in channels) {
       if (micromatch.isMatch(name, key)) {
         for (const client of channels[key]) {

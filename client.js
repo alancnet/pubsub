@@ -7,6 +7,7 @@ export default class Client {
     this.reconnectTimer = null
     this.subscriptions = new Map()
     this.publishQueue = []
+    this.desiredState = WebSocket.CLOSED
   }
   async reconnect() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -15,14 +16,21 @@ export default class Client {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
     }
-    this.reconnectTimer = setTimeout(() => {
-      this.connect()
-    }, this.options.delay)
+    if (this.desiredState === WebSocket.OPEN) {
+      this.reconnectTimer = setTimeout(() => {
+        this.connect()
+      }, this.options.delay)
+    }
   }
   async connect () {
+    this.desiredState = WebSocket.OPEN
+    if (this.ws?.readyState === WebSocket.OPEN) return
     this.ws = new WebSocket(this.url)
     this.ws.on('open', () => {
-      console.log('open', this.subscriptions)
+      if (this.desiredState === WebSocket.CLOSED) {
+        this.ws.close()
+        return
+      }
       // Resubscribe to existing subscriptions
       this.subscriptions.forEach((callbacks, channel) => {
         callbacks.forEach(callback => {
@@ -59,22 +67,23 @@ export default class Client {
               }
               break
             }
-          case 'error':
-            console.log('error', data.message)
-            break
         }
       })
       this.ws.on('close', () => {
-        console.log('close')
         if (this.options.reconnect) this.reconnect()
       })
       this.ws.on('error', (err) => {
-        console.log('error', err)
         if (this.options.reconnect) this.reconnect()
       })
     })
   }
-
+  disconnect() {
+    this.desiredState = WebSocket.CLOSED
+    if (this.ws) {
+      this.ws.close()
+    }
+    this.ws = null
+  }
   subscribe(channel, callback) {
     if (!this.subscriptions.has(channel)) {
       this.subscriptions.set(channel, new Set())
